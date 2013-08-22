@@ -102,6 +102,9 @@ class NaoSensors(NaoNode, Thread):
             self.jointState.name.append("RWristYaw")
             self.jointState.name.append("RHand")
 
+        self.jointState.name[7] = "l_gripper_joint"
+        self.jointState.name[25] = "r_gripper_joint"
+
         msg = "Nao joints found: "+ str(self.jointState.name)
         rospy.logdebug(msg)
 

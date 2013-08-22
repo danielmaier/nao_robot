@@ -2,10 +2,10 @@
 
 #
 # ROS node to provide joint angle control to Nao by wrapping NaoQI
-# This code is currently compatible to NaoQI version 1.6 or newer (latest 
+# This code is currently compatible to NaoQI version 1.6 or newer (latest
 # tested: 1.12)
 #
-# Copyright 2011 Armin Hornung, University of Freiburg
+# Copyright 2011 Armin Hornung, Daniel Maier, University of Freiburg
 # http://www.ros.org/wiki/nao
 #
 # Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ from nao_msgs.msg import(
     JointAnglesWithSpeedGoal,
     JointAnglesWithSpeedResult,
     JointAnglesWithSpeedAction)
- 
+
 from nao_driver import NaoNode
 
 import math
@@ -56,28 +56,28 @@ from std_srvs.srv import Empty, EmptyResponse
 from sensor_msgs.msg import JointState
 
 class NaoController(NaoNode):
-    def __init__(self): 
+    def __init__(self):
         NaoNode.__init__(self)
-    
+
         # ROS initialization:
         rospy.init_node('nao_controller')
-        
+
         self.connectNaoQi()
-        
+
         # store the number of joints in each motion chain and collection, used for sanity checks
         self.collectionSize = {}
         for collectionName in ['Head', 'LArm', 'LLeg', 'RLeg', 'RArm', 'Body', 'BodyJoints', 'BodyActuators']:
             self.collectionSize[collectionName] = len(self.motionProxy.getJointNames(collectionName));
-    
+
 
         # Get poll rate for actionlib (ie. how often to check whether currently running task has been preempted)
         # Defaults to 200ms
         self.poll_rate = int(rospy.get_param("~poll_rate", 0.2)*1000)
-        
+
         # initial stiffness (defaults to 0 so it doesn't strain the robot when no teleoperation is running)
         # set to 1.0 if you want to control the robot immediately
         initStiffness = rospy.get_param('~init_stiffness', 0.0)
-        
+
         # TODO: parameterize
         if initStiffness > 0.0 and initStiffness <= 1.0:
             self.motionProxy.stiffnessInterpolation('Body', initStiffness, 0.5)
@@ -89,15 +89,15 @@ class NaoController(NaoNode):
 
 
         #Start simple action servers
-        self.jointTrajectoryServer = actionlib.SimpleActionServer("joint_trajectory", JointTrajectoryAction, 
+        self.jointTrajectoryServer = actionlib.SimpleActionServer("joint_trajectory", JointTrajectoryAction,
                                                                   execute_cb=self.executeJointTrajectoryAction,
                                                                   auto_start=False)
-        
-        self.jointStiffnessServer = actionlib.SimpleActionServer("joint_stiffness_trajectory", JointTrajectoryAction, 
+
+        self.jointStiffnessServer = actionlib.SimpleActionServer("joint_stiffness_trajectory", JointTrajectoryAction,
                                                                   execute_cb=self.executeJointStiffnessAction,
                                                                   auto_start=False)
-        
-        self.jointAnglesServer = actionlib.SimpleActionServer("joint_angles_action", JointAnglesWithSpeedAction, 
+
+        self.jointAnglesServer = actionlib.SimpleActionServer("joint_angles_action", JointAnglesWithSpeedAction,
                                                                   execute_cb=self.executeJointAnglesWithSpeedAction,
                                                                   auto_start=False)
 
@@ -119,7 +119,7 @@ class NaoController(NaoNode):
         self.motionProxy = self.getProxy("ALMotion")
         if self.motionProxy is None:
             exit(1)
-            
+
     def handleJointAngles(self, msg):
         rospy.logdebug("Received a joint angle target")
         try:
@@ -130,7 +130,7 @@ class NaoController(NaoNode):
                 self.motionProxy.changeAngles(list(msg.joint_names), list(msg.joint_angles), msg.speed)
         except RuntimeError,e:
             rospy.logerr("Exception caught:\n%s", e)
-            
+
     def handleJointStiffness(self, msg):
         rospy.logdebug("Received a joint angle stiffness")
         try:
@@ -146,7 +146,7 @@ class NaoController(NaoNode):
         except RuntimeError,e:
             rospy.logerr("Exception caught:\n%s", e)
             return None
-        
+
     def handleStiffnessOffSrv(self, req):
         try:
             self.motionProxy.stiffnessInterpolation("Body", 0.0, 0.5)
@@ -155,19 +155,19 @@ class NaoController(NaoNode):
         except RuntimeError,e:
             rospy.logerr("Exception caught:\n%s", e)
             return None
-            
+
 
     def jointTrajectoryGoalMsgToAL(self, goal):
         """Helper, convert action goal msg to Aldebraran-style arrays for NaoQI"""
         names = list(goal.trajectory.joint_names)
 #        if goal.trajectory.joint_names == ["Body"]:
 #            names = self.motionProxy.getJointNames('Body')
-       
+
         if len(goal.trajectory.points) == 1 and len(goal.trajectory.points[0].positions) == 1:
             angles = goal.trajectory.points[0].positions[0]
         else:
             angles = list(list(p.positions[i] for p in goal.trajectory.points) for i in range(0,len(goal.trajectory.points[0].positions)))
-        
+
         #strip 6,7 and last 2 from angles if the pose was for H25 but we're running an H21
         if not isinstance(angles, float) and len(angles) > self.collectionSize["Body"]:
             rospy.loginfo("Stripping angles from %d down to %d", len(angles), self.collectionSize["Body"])
@@ -175,29 +175,29 @@ class NaoController(NaoNode):
             angles.pop(7)
             angles.pop()
             angles.pop()
-            
+
         if len(names) > self.collectionSize["Body"]:
             rospy.loginfo("Stripping names from %d down to %d", len(names), self.collectionSize["Body"])
             names.pop(6)
             names.pop(7)
             names.pop()
             names.pop()
-        
+
         times = list(p.time_from_start.to_sec() for p in goal.trajectory.points)
         if len(times) == 1 and len(names) == 1:
             times = times[0]
         if (len(names) > 1):
             times = [times]*len(names)
-            
+
         return (names, angles, times)
-    
+
 
     def executeJointTrajectoryAction(self, goal):
         rospy.loginfo("JointTrajectory action executing");
-                    
+
         names, angles, times = self.jointTrajectoryGoalMsgToAL(goal)
-                
-        rospy.logdebug("Received trajectory for joints: %s times: %s", str(names), str(times))     
+
+        rospy.logdebug("Received trajectory for joints: %s times: %s", str(names), str(times))
         rospy.logdebug("Trajectory angles: %s", str(angles))
 
         task_id = None
@@ -208,14 +208,14 @@ class NaoController(NaoNode):
             if task_id is None:
                 # ...Start it in another thread (thanks to motionProxy.post)
                 task_id = self.motionProxy.post.angleInterpolation(names, angles, times, (goal.relative==0))
-            
+
             #Wait for a bit to complete, otherwise check we can keep running
             running = self.motionProxy.wait(task_id, self.poll_rate)
-        
+
         # If still running at this point, stop the task
         if running and task_id:
             self.motionProxy.stop( task_id )
-        
+
         jointTrajectoryResult = JointTrajectoryResult()
         jointTrajectoryResult.goal_position.header.stamp = rospy.Time.now()
         jointTrajectoryResult.goal_position.position = self.motionProxy.getAngles(names, True)
@@ -224,11 +224,11 @@ class NaoController(NaoNode):
         if not self.checkJointsLen(jointTrajectoryResult.goal_position):
             self.jointTrajectoryServer.set_aborted(jointTrajectoryResult)
             rospy.logerr("JointTrajectory action error in result: sizes mismatch")
-        
+
         elif running:
             self.jointTrajectoryServer.set_preempted(jointTrajectoryResult)
             rospy.logdebug("JointTrajectory preempted")
-        
+
         else:
             self.jointTrajectoryServer.set_succeeded(jointTrajectoryResult)
             rospy.loginfo("JointTrajectory action done")
@@ -236,10 +236,10 @@ class NaoController(NaoNode):
 
     def executeJointStiffnessAction(self, goal):
         rospy.loginfo("JointStiffness action executing");
-                    
+
         names, angles, times = self.jointTrajectoryGoalMsgToAL(goal)
-        
-        rospy.logdebug("Received stiffness trajectory for joints: %s times: %s", str(names), str(times))     
+
+        rospy.logdebug("Received stiffness trajectory for joints: %s times: %s", str(names), str(times))
         rospy.logdebug("stiffness values: %s", str(angles))
 
         task_id = None
@@ -250,14 +250,14 @@ class NaoController(NaoNode):
             if task_id is None:
                 # ...Start it in another thread (thanks to motionProxy.post)
                 task_id = self.motionProxy.post.stiffnessInterpolation(names, angles, times)
-            
+
             #Wait for a bit to complete, otherwise check we can keep running
             running = self.motionProxy.wait(task_id, self.poll_rate)
 
         # If still running at this point, stop the task
         if running and task_id:
             self.motionProxy.stop( task_id )
-            
+
         jointStiffnessResult = JointTrajectoryResult()
         jointStiffnessResult.goal_position.header.stamp = rospy.Time.now()
         jointStiffnessResult.goal_position.position = self.motionProxy.getStiffnesses(names)
@@ -266,26 +266,26 @@ class NaoController(NaoNode):
         if not self.checkJointsLen(jointStiffnessResult.goal_position):
             self.jointStiffnessServer.set_aborted(jointStiffnessResult)
             rospy.logerr("JointStiffness action error in result: sizes mismatch")
-        
+
         elif running:
             self.jointStiffnessServer.set_preempted(jointStiffnessResult)
             rospy.logdebug("JointStiffness preempted")
-        
+
         else:
             self.jointStiffnessServer.set_succeeded(jointStiffnessResult)
             rospy.loginfo("JointStiffness action done")
-            
 
-    def executeJointAnglesWithSpeedAction(self, goal):           
-        
+
+    def executeJointAnglesWithSpeedAction(self, goal):
+
         names = list(goal.joint_angles.joint_names)
         angles = list(goal.joint_angles.joint_angles)
         rospy.logdebug("Received JointAnglesWithSpeed for joints: %s angles: %s", str(names), str(angles))
-            
+
         if goal.joint_angles.relative == 1:
             # TODO: this uses the current angles instead of the angles at the given timestamp
             currentAngles = self.motionProxy.getAngles(names, True)
-            angles = list(map(lambda x,y: x+y, angles, currentAngles))            
+            angles = list(map(lambda x,y: x+y, angles, currentAngles))
 
         task_id = None
         running = True
@@ -295,14 +295,14 @@ class NaoController(NaoNode):
             if task_id is None:
                 # ...Start it in another thread (thanks to motionProxy.post)
                 task_id = self.motionProxy.post.angleInterpolationWithSpeed(names, angles, goal.joint_angles.speed)
-            
+
             #Wait for a bit to complete, otherwise check we can keep running
             running = self.motionProxy.wait(task_id, self.poll_rate)
-        
+
         # If still running at this point, stop the task
         if running and task_id:
             self.motionProxy.stop( task_id )
-            
+
         jointAnglesWithSpeedResult = JointAnglesWithSpeedResult()
         jointAnglesWithSpeedResult.goal_position.header.stamp = rospy.Time.now()
         jointAnglesWithSpeedResult.goal_position.position = self.motionProxy.getAngles(names, True)
@@ -320,9 +320,9 @@ class NaoController(NaoNode):
             self.jointAnglesServer.set_succeeded(jointAnglesWithSpeedResult)
             rospy.loginfo("JointAnglesWithSpeed action done")
 
-    def checkJointsLen(self, goal_position):      
+    def checkJointsLen(self, goal_position):
         if len(goal_position.name) == 1 and self.collectionSize.has_key(goal_position.name[0]):
-            return len(goal_position.position) == self.collectionSize[goal_position.name[0]] 
+            return len(goal_position.position) == self.collectionSize[goal_position.name[0]]
         else:
             return len(goal_position.position) ==  len(goal_position.name)
 
@@ -331,6 +331,6 @@ if __name__ == '__main__':
     controller = NaoController()
     rospy.loginfo("nao_controller running...")
     rospy.spin()
-    
+
     rospy.loginfo("nao_controller stopped.")
     exit(0)
