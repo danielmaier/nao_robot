@@ -45,6 +45,11 @@ from nao_msgs.msg import(
     JointAnglesWithSpeedGoal,
     JointAnglesWithSpeedResult,
     JointAnglesWithSpeedAction)
+from control_msgs.msg import(
+    FollowJointTrajectoryGoal,
+    FollowJointTrajectoryResult,
+    FollowJointTrajectoryAction
+)
 
 from nao_driver import NaoNode
 
@@ -101,10 +106,20 @@ class NaoController(NaoNode):
                                                                   execute_cb=self.executeJointAnglesWithSpeedAction,
                                                                   auto_start=False)
 
+        self.followJointTrajectoryServer = actionlib.SimpleActionServer("follow_joint_trajectory", FollowJointTrajectoryAction,
+                                                                  execute_cb=self.executeFollowJointTrajectoryAction,
+                                                                  auto_start=False)
+
+        # cach goal
+        self.active_goal_ = None # will be a FollowJointTrajectoryGoal
+        self.current_traj_ = None # trajectory_msgs/JointTrajectory
+        self.last_trajectory_state_ = None # FollowJointTrajectoryFeedback
+
         #Start action servers
         self.jointTrajectoryServer.start()
         self.jointStiffnessServer.start()
         self.jointAnglesServer.start()
+        self.followJointTrajectoryServer.start()
 
         # subsribers last:
         rospy.Subscriber("joint_angles", JointAnglesWithSpeed, self.handleJointAngles, queue_size=10)
@@ -119,6 +134,75 @@ class NaoController(NaoNode):
         self.motionProxy = self.getProxy("ALMotion")
         if self.motionProxy is None:
             exit(1)
+
+    # bool (FollowJointTrajectoryFeedback msg, JointTrajectory traj)
+    def withinGoalConstraints( self, msg, traj):
+        return True
+    # void (FollowJointTrajectoryFeedback msg)
+    def controllerStateCB( self, msg):
+        None
+
+    # FollowJointTrajectory callbacks
+    def cancelFollowJointTrajCB(self, gh):
+        None
+    def goalFollowJointTrajCB(self, gh):
+        None
+
+    def executeFollowJointTrajectoryAction(self, goal):
+        rospy.loginfo("FollowJointTrajectory action executing");
+
+        if len(goal.trajectory.points) > 1:
+            goal.trajectory.points = goal.trajectory.points[1:]
+        # convert to naoqi names, angles, times
+        names, angles, times = self.jointTrajectoryGoalMsgToAL(goal)
+
+        # Hack needed because moveit sends position[0].time_from_start=0
+
+
+        rospy.logdebug("Received trajectory for joints: %s times: %s", str(names), str(times))
+        rospy.logdebug("Trajectory angles: %s", str(angles))
+
+        task_id = None
+        running = True
+        preempt = False
+        #Wait for task to complete
+        # TODO 1: get current position and check if position[0]==current position+path_tolerance (mix with TODO 3)
+        # TODO 2: add timout using goal.goal_time_tolerance
+        # TODO 3: add JointTolerance check using goal.path_tolerance
+        # TODO 4: add feedback
+
+        while running and not preempt and not rospy.is_shutdown():
+            #If we haven't started the task already...
+            if task_id is None:
+                # ...Start it in another thread (thanks to motionProxy.post)
+                task_id = self.motionProxy.post.angleInterpolation(names, angles, times, True) # True = absolute
+
+            preempt = self.followJointTrajectoryServer.is_preempt_requested()
+            #Wait for a bit to complete, otherwise check we can keep running
+            running = self.motionProxy.wait(task_id, self.poll_rate)
+
+        # If still running at this point, stop the task
+        if running and task_id:
+            self.motionProxy.stop( task_id )
+
+        followJointTrajectoryResult = FollowJointTrajectoryResult()
+        # followJointTrajectoryResult.goal_position.header.stamp = rospy.Time.now()
+        # followJointTrajectoryResult.goal_position.position = self.motionProxy.getAngles(names, True)
+        # followJointTrajectoryResult.goal_position.name = names
+
+#         if not self.checkJointsLen(followJointTrajectoryResult.goal_position):
+#             followJointTrajectoryResult.error_code = FollowJointTrajectoryResult.INVALID_JOINTS
+#             self.followJointTrajectoryServer.set_aborted(followJointTrajectoryResult)
+#             rospy.logerr("FollowJointTrajectory action error in result: sizes mismatch")
+
+        if running and preempt:
+            self.followJointTrajectoryServer.set_preempted(followJointTrajectoryResult)
+            rospy.logdebug("FollowJointTrajectory preempted")
+
+        else:
+            self.followJointTrajectoryServer.set_succeeded(followJointTrajectoryResult)
+            rospy.loginfo("FollowJointTrajectory action done")
+
 
     def handleJointAngles(self, msg):
         rospy.logdebug("Received a joint angle target")
@@ -166,10 +250,12 @@ class NaoController(NaoNode):
         if len(goal.trajectory.points) == 1 and len(goal.trajectory.points[0].positions) == 1:
             angles = goal.trajectory.points[0].positions[0]
         else:
+            # convert angles to naoqi style: outer array contains the joints, inner array the angle values
             angles = list(list(p.positions[i] for p in goal.trajectory.points) for i in range(0,len(goal.trajectory.points[0].positions)))
 
         #strip 6,7 and last 2 from angles if the pose was for H25 but we're running an H21
         if not isinstance(angles, float) and len(angles) > self.collectionSize["Body"]:
+            #TODO: This is dangerous!
             rospy.loginfo("Stripping angles from %d down to %d", len(angles), self.collectionSize["Body"])
             angles.pop(6)
             angles.pop(7)
@@ -177,6 +263,7 @@ class NaoController(NaoNode):
             angles.pop()
 
         if len(names) > self.collectionSize["Body"]:
+            #TODO: This is dangerous!
             rospy.loginfo("Stripping names from %d down to %d", len(names), self.collectionSize["Body"])
             names.pop(6)
             names.pop(7)
