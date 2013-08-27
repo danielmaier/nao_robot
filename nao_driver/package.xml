@@ -43,6 +43,7 @@
   <run_depend>geometry_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>diagnostic_msgs</run_depend>
+  <run_depend>nao_msgs</run_depend>
   <run_depend>control_msgs</run_depend>
   <run_depend>humanoid_nav_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
