@@ -259,7 +259,12 @@
     <parent link="HeadPitch_link"/>
     <child link="CameraBottom_frame"/>
     <!-- rotated by 39.7 degrees -->
-    <origin xyz="0.05071 0 0.01774" rpy="-2.263692 0 -${pi_2}" />
+    <!--origin xyz="0.05071 0 0.01774" rpy="-2.263692 0 -${pi_2}" /-->
+    <!-- ramin & christian version -->
+    <!--
+    <origin xyz="0.05071 0 0.01774" rpy="-2.153692 0.02 -${pi_2-0.1}" />
+-->
+    <origin xyz="0.05071 0 0.01774" rpy="${-2.153692+0.04} 0.04 -${pi_2+0.00}" />
   </joint>
   
   
