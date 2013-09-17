@@ -176,8 +176,8 @@ class NaoController(NaoNode):
         # Hack needed because moveit sends position[0].time_from_start=0
 
 
-        rospy.logdebug("Received trajectory for joints: %s times: %s", str(names), str(times))
-        rospy.logdebug("Trajectory angles: %s", str(angles))
+        rospy.loginfo("Received trajectory for joints: %s times: %s", str(names), str(times))
+        rospy.loginfo("Trajectory angles: %s", str(angles))
 
         task_id = None
         running = True
