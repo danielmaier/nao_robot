@@ -15,7 +15,6 @@ import trajectory_msgs.msg
 from trajectory_msgs.msg import JointTrajectoryPoint
 import std_srvs.srv
 
-# go to crouching position
 def joint_angle_client():
     #inhibitWalkSrv = rospy.ServiceProxy("inhibit_walk", std_srvs.srv.Empty)
     #uninhibitWalkSrv = rospy.ServiceProxy("uninhibit_walk", std_srvs.srv.Empty)
