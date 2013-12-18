@@ -16,19 +16,14 @@ from trajectory_msgs.msg import JointTrajectoryPoint
 import std_srvs.srv
 
 def joint_angle_client():
-    #inhibitWalkSrv = rospy.ServiceProxy("inhibit_walk", std_srvs.srv.Empty)
-    #uninhibitWalkSrv = rospy.ServiceProxy("uninhibit_walk", std_srvs.srv.Empty)
 
     client = actionlib.SimpleActionClient("follow_joint_trajectory",
                                                       control_msgs.msg.FollowJointTrajectoryAction)
 
     rospy.loginfo("Waiting for follow_joint_trajectory server...")
     client.wait_for_server()
-    #stiffness_client.wait_for_server()
-    #angle_client.wait_for_server()
     rospy.loginfo("Done.")
 
-    #inhibitWalkSrv()
     try:
         goal = control_msgs.msg.FollowJointTrajectoryGoal()
 
@@ -46,7 +41,6 @@ def joint_angle_client():
         client.wait_for_result()
         rospy.loginfo("Getting results...")
         result = client.get_result()
-        #print "Result:", ', '.join([str(n) for n in result.goal_position.position])
 
 
     finally:
