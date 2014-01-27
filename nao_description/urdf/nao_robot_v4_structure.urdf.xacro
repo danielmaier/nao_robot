@@ -229,7 +229,7 @@
     <parent link="torso"/>
     <child link="HeadYaw_link"/>
 	<!-- NeckOffsetZ -->
-    <origin xyz="0 0 0.1265" rpy="0 0 0" />
+    <origin xyz="0 0 0.1265" rpy="0 0 ${HeadYaw_y}" />
     <axis xyz="0 0 1" />
     <limit velocity="3.0" effort="30" lower="-2.0857" upper="2.0857" />
   </joint>
@@ -237,7 +237,7 @@
   <joint name="HeadPitch" type="revolute">
     <parent link="HeadYaw_link"/>
     <child link="HeadPitch_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0" />
+    <origin xyz="0 0 0" rpy="0 ${HeadPitch_p} 0" />
     <axis xyz="0 1 0" />
     <limit velocity="3.0" effort="30" lower="-0.6720" upper="0.5149" />
   </joint>
@@ -259,17 +259,16 @@
     <parent link="HeadPitch_link"/>
     <child link="CameraBottom_frame"/>
     <!-- rotated by 39.7 degrees -->
- <!--origin xyz="0.05071 0 0.01774" rpy="-2.263692 0 -${pi_2}" /-->
-    <origin xyz="0.05071 0 0.01774" rpy="-2.153692 0.02 -${pi_2-0.1}" />
+    <origin xyz="${Camera_tx} ${Camera_ty} ${Camera_tz}" rpy="${Camera_rr} ${Camera_rp} ${Camera_ry}" />
   </joint>
   
   
   <!-- Arm joints -->
-  <xacro:macro name="arm_joints" params="side reflect">
+  <xacro:macro name="arm_joints" params="side reflect ShoulderPitch_p ElbowYaw_r">
   <joint name="${side}ShoulderPitch" type="revolute">
     <parent link="torso"/>
     <child link="${side}ShoulderPitch_link"/>
-    <origin xyz="0 ${reflect*-0.098} 0.1" rpy="0 0 0"/>
+    <origin xyz="0 ${reflect*-0.098} 0.1" rpy="0 ${ShoulderPitch_p} 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="3.0" effort="30" lower="-2.0857" upper="2.0857"/>
   </joint>

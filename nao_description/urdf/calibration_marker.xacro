@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <link name="LMarker_frame" />
+  
+  <joint name="LMarker" type="fixed">
+    <parent link="l_wrist" />
+    <child link="LMarker_frame" />
+    <origin xyz="${larm_marker_tx} ${larm_marker_ty} ${larm_marker_tz}" rpy="${larm_marker_rr} ${larm_marker_rp} ${larm_marker_ry}" />
+  </joint>
+
+  <link name="RMarker_frame" />
+  
+  <joint name="RMarker" type="fixed">
+    <parent link="r_wrist" />
+    <child link="RMarker_frame" />
+    <origin xyz="${rarm_marker_tx} ${rarm_marker_ty} ${rarm_marker_tz}" rpy="${rarm_marker_rr} ${rarm_marker_rp} ${rarm_marker_ry}" />
+  </joint>
+</robot> 
