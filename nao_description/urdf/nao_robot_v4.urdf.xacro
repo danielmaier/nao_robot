@@ -16,6 +16,9 @@
   
   -->
 
+  <include filename="$(find nao_description)/urdf/calibration_joint_offsets.xacro" />
+  <include filename="$(find nao_description)/urdf/calibration_camera_transform.xacro" />
+  
   <include filename="$(find nao_description)/urdf/visuals.xacro" />
   <include filename="$(find nao_description)/urdf/nao_robot_v4_structure.urdf.xacro" />
 </robot>

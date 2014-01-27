@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot>
+	<property name="Camera_tx" value="0.05071" />
+	<property name="Camera_ty" value="0" />
+	<property name="Camera_tz" value="0.01774" />
+	<property name="Camera_rr" value="-2.263692" />
+	<property name="Camera_rp" value="0" />
+	<property name="Camera_ry" value="-1.5708" />
+</robot>
