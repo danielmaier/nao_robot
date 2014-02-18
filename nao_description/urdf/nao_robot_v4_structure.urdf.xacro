@@ -229,7 +229,7 @@
     <parent link="torso"/>
     <child link="HeadYaw_link"/>
 	<!-- NeckOffsetZ -->
-    <origin xyz="0 0 0.1265" rpy="0 0 0" />
+    <origin xyz="0 0 0.1265" rpy="0 0 ${HeadYaw_y}" />
     <axis xyz="0 0 1" />
     <limit velocity="3.0" effort="30" lower="-2.0857" upper="2.0857" />
   </joint>
@@ -237,7 +237,7 @@
   <joint name="HeadPitch" type="revolute">
     <parent link="HeadYaw_link"/>
     <child link="HeadPitch_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0" />
+    <origin xyz="0 0 0" rpy="0 ${HeadPitch_p} 0" />
     <axis xyz="0 1 0" />
     <limit velocity="3.0" effort="30" lower="-0.6720" upper="0.5149" />
   </joint>
@@ -259,17 +259,16 @@
     <parent link="HeadPitch_link"/>
     <child link="CameraBottom_frame"/>
     <!-- rotated by 39.7 degrees -->
- <!--origin xyz="0.05071 0 0.01774" rpy="-2.263692 0 -${pi_2}" /-->
-    <origin xyz="0.05071 0 0.01774" rpy="-2.153692 0.02 -${pi_2-0.1}" />
+    <origin xyz="${Camera_tx} ${Camera_ty} ${Camera_tz}" rpy="${Camera_rr} ${Camera_rp} ${Camera_ry}" />
   </joint>
   
   
   <!-- Arm joints -->
-  <xacro:macro name="arm_joints" params="side reflect">
+  <xacro:macro name="arm_joints" params="side reflect ShoulderPitch_p ElbowYaw_r">
   <joint name="${side}ShoulderPitch" type="revolute">
     <parent link="torso"/>
     <child link="${side}ShoulderPitch_link"/>
-    <origin xyz="0 ${reflect*-0.098} 0.1" rpy="0 0 0"/>
+    <origin xyz="0 ${reflect*-0.098} 0.1" rpy="0 ${ShoulderPitch_p} 0"/>
     <axis xyz="0 1 0"/>
     <limit velocity="3.0" effort="30" lower="-2.0857" upper="2.0857"/>
   </joint>
@@ -277,7 +276,7 @@
   <joint name="${side}ElbowYaw" type="revolute">
     <parent link="${side}ShoulderRoll_link"/>
     <child link="${side}ElbowYaw_link"/>
-    <origin xyz="0.105 ${reflect*-0.015} 0" rpy="0 0 0"/>
+    <origin xyz="0.105 ${reflect*-0.015} 0" rpy="${ElbowYaw_r} 0 0"/>
     <axis xyz="1 0 0"/>
     <limit velocity="3.0" effort="30" lower="-2.0857" upper="2.0857"/>
   </joint>
@@ -295,12 +294,12 @@
   <joint name="l_wrist_joint" type="fixed">
     <parent link="LWristYaw_link" />
     <child link="l_wrist" />
-    <origin xyz="0 0 0" />
+    <origin xyz="0 0 0" rpy="0 0 0" />
   </joint>
   <joint name="r_wrist_joint" type="fixed">
     <parent link="RWristYaw_link" />
     <child link="r_wrist" />
-    <origin xyz="0 0 0" />
+    <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
   
   <joint name="l_gripper_joint" type="fixed">
@@ -318,14 +317,14 @@
   <joint name="LElbowRoll" type="revolute">
     <parent link="LElbowYaw_link"/>
     <child link="LElbowRoll_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 ${LElbowRoll_y}"/>
     <axis xyz="0 0 1"/>
     <limit velocity="3.0" effort="30" lower="-1.5446" upper="-0.0349"/>
   </joint>
   <joint name="RElbowRoll" type="revolute">
     <parent link="RElbowYaw_link"/>
     <child link="RElbowRoll_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 ${RElbowRoll_y}"/>
     <axis xyz="0 0 1"/>
     <limit velocity="3.0" effort="30" lower="0.0349" upper="1.5446"/>
   </joint>
@@ -333,20 +332,20 @@
   <joint name="LShoulderRoll" type="revolute">
     <parent link="LShoulderPitch_link"/>
     <child link="LShoulderRoll_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 ${LShoulderRoll_y}"/>
     <axis xyz="0 0 1"/>
     <limit velocity="3.0" effort="30" lower="-0.3142" upper="1.3265"/>
   </joint>
   <joint name="RShoulderRoll" type="revolute">
     <parent link="RShoulderPitch_link"/>
     <child link="RShoulderRoll_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 0" rpy="0 0 ${RShoulderRoll_y}"/>
     <axis xyz="0 0 1"/>
     <limit velocity="3.0" effort="30" lower="-1.3265" upper="0.3142"/>
   </joint>
 
-  <xacro:arm_joints side="L" reflect="-1"/>
-  <xacro:arm_joints side="R" reflect="1"/>  
+  <xacro:arm_joints side="L" reflect="-1" ShoulderPitch_p="${LShoulderPitch_p}" ElbowYaw_r="${LElbowYaw_r}" />
+  <xacro:arm_joints side="R" reflect="1" ShoulderPitch_p="${RShoulderPitch_p}" ElbowYaw_r="${RElbowYaw_r}" />  
   
   <!-- Leg joints -->
   <joint name="LHipYawPitch" type="revolute">
@@ -452,6 +451,6 @@
 
   
   <xacro:leg_joints side="L" reflect="-1"/>
-  <xacro:leg_joints side="R" reflect="1"/>  
+  <xacro:leg_joints side="R" reflect="1"/> 
   
 </robot>

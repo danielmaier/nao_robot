@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<robot>
+<property name="HeadPitch_p" value="0" />
+<property name="HeadPitch_r" value="0" />
+<property name="HeadPitch_y" value="0" />
+<property name="HeadYaw_p" value="0" />
+<property name="HeadYaw_r" value="0" />
+<property name="HeadYaw_y" value="0" />
+<property name="LElbowRoll_p" value="0" />
+<property name="LElbowRoll_r" value="0" />
+<property name="LElbowRoll_y" value="0" />
+<property name="LElbowYaw_p" value="0" />
+<property name="LElbowYaw_r" value="0" />
+<property name="LElbowYaw_y" value="0" />
+<property name="LShoulderPitch_p" value="0" />
+<property name="LShoulderPitch_r" value="0" />
+<property name="LShoulderPitch_y" value="0" />
+<property name="LShoulderRoll_p" value="0" />
+<property name="LShoulderRoll_r" value="0" />
+<property name="LShoulderRoll_y" value="0" />
+<property name="RElbowRoll_p" value="0" />
+<property name="RElbowRoll_r" value="0" />
+<property name="RElbowRoll_y" value="0" />
+<property name="RElbowYaw_p" value="0" />
+<property name="RElbowYaw_r" value="0" />
+<property name="RElbowYaw_y" value="0" />
+<property name="RShoulderPitch_p" value="0" />
+<property name="RShoulderPitch_r" value="0" />
+<property name="RShoulderPitch_y" value="0" />
+<property name="RShoulderRoll_p" value="0" />
+<property name="RShoulderRoll_r" value="0" />
+<property name="RShoulderRoll_y" value="0" />
+</robot>
