@@ -34,6 +34,8 @@
 #
 
 
+import copy
+import random
 import rospy
 import actionlib
 import nao_msgs.msg
@@ -44,17 +46,23 @@ from nao_msgs.msg import(
     JointAnglesWithSpeed,
     JointAnglesWithSpeedGoal,
     JointAnglesWithSpeedResult,
-    JointAnglesWithSpeedAction)
+    JointAnglesWithSpeedAction,
+    ReachJointValuesPreciseGoal,
+    ReachJointValuesPreciseResult,
+    ReachJointValuesPreciseAction
+)
 from control_msgs.msg import(
     FollowJointTrajectoryGoal,
     FollowJointTrajectoryResult,
     FollowJointTrajectoryAction
 )
 
+#from trajectory_msgs import JointTrajectoryPoint
 from nao_driver import NaoNode
 
 import math
 from math import fabs
+import time
 
 from std_msgs.msg import String
 from std_srvs.srv import Empty, EmptyResponse
@@ -110,6 +118,10 @@ class NaoController(NaoNode):
                                                                   execute_cb=self.executeFollowJointTrajectoryAction,
                                                                   auto_start=False)
 
+        self.refineJointTargetServer = actionlib.SimpleActionServer("refine_joint_target", ReachJointValuesPreciseAction,
+                                                                  execute_cb=self.refineJointTarget,
+                                                                  auto_start=False)
+
         # cach goal
         self.active_goal_ = None # will be a FollowJointTrajectoryGoal
         self.current_traj_ = None # trajectory_msgs/JointTrajectory
@@ -120,6 +132,7 @@ class NaoController(NaoNode):
         self.jointStiffnessServer.start()
         self.jointAnglesServer.start()
         self.followJointTrajectoryServer.start()
+        self.refineJointTargetServer.start()
 
         # subsribers last:
         rospy.Subscriber("joint_angles", JointAnglesWithSpeed, self.handleJointAngles, queue_size=10)
@@ -148,6 +161,211 @@ class NaoController(NaoNode):
     def goalFollowJointTrajCB(self, gh):
         None
 
+    def unused(self):
+        while False and not target_reached and not preempt and not rospy.is_shutdown():
+            #If we haven't started the task already...
+            if task_id is None:
+                print "posting new angle target"
+                # ...Start it in another thread (thanks to motionProxy.post)
+                print "setting angles:"
+                print angles
+                task_id = self.motionProxy.post.angleInterpolation(names, angles, times, True) # True = absolute
+
+            preempt = self.followJointTrajectoryServer.is_preempt_requested()
+            #Wait for a bit to complete, otherwise check we can keep running
+            task_running = self.motionProxy.wait(task_id, self.poll_rate)
+            if task_running:
+                continue
+            cur_angles = self.motionProxy.getAngles(names, True)
+            diff = [target_angles[i][0] - cur_angles[i] for i in range(n)]
+            print names
+            print "target:"
+            print target_angles
+            print "current:"
+            print cur_angles
+            print "delta:"
+            print diff
+            check = [abs(a) < 1e-3 for a in diff]
+            if all(check):
+                target_reached = True
+                if not target_reached:
+                    times = [[0.4]] * n
+                task_id = None # delete task_id (not running)
+                for i in range(len(check)):
+                    if not check[i]:
+                        angles[i][0] = target_angles[i][0] + random.gauss(0, 0.01)
+                print "sampling new angles:"
+                print angles
+# [[0.8344593157473145], [-0.5520254057235296], [-0.343486980555247], [-0.6473265115351312], [-0.07050333687130783]]
+
+
+    def setAngles(self, jn, target_angle, thresh, t, inc, lim, max_dur=15.0 ):
+        new_target = target_angle
+        diff = 1000.0
+        crucial_error = False
+        start_time = time.time()
+        while not crucial_error :
+            if ( time.time() - start_time) > max_dur:
+                rospy.logwarn("Time limit %f for joint %s exceeded"%(max_dur, jn))
+                crucial_error = True
+                break
+            if self.refineJointTargetServer.is_preempt_requested() or rospy.is_shutdown():
+                rospy.loginfo("Preempt requested")
+                break
+            self.motionProxy.angleInterpolation(jn, new_target, t, True)
+            cur = self.motionProxy.getAngles(jn, True)
+            diff = cur[0] - target_angle
+            if fabs(diff) < thresh:
+                print "%s: difference is %lf < %lf with target=%lf, cur=%lf. quitting succesfully"%(jn,fabs(diff),thresh, target_angle,cur[0])
+                break
+            if fabs(diff) > 0.45:
+                rospy.logerr("%s angle difference is %lf. Joint is probably overheated"%(jn, diff))
+                crucial_error = True
+                break
+            if diff < 0:
+                new_target = new_target + inc
+            elif diff > 0:
+                new_target = new_target - inc
+            print "%s target: %lf, cur: %lf, setting: %lf, min: %lf, max: %lf"%(jn, target_angle, cur[0], new_target,lim[0],lim[1])
+            if new_target > lim[1] or new_target < lim[0]:
+                crucial_error = True
+                rospy.logerr("Reached limit for %s. target is %lf and limits are [%lf, %lf]"%(jn, new_target, lim[0], lim[1]))
+        return (not crucial_error, new_target)
+
+    def refineJointTarget(self, goal):
+        dur = 0.25
+        max_dur = 15.0
+        increment = 0.01
+        rospy.loginfo("Refine called")
+        if len(goal.trajectory.points) > 1:
+            rospy.logerr("only supporting single goal right now")
+
+        res = ReachJointValuesPreciseResult()
+        res.error_code = -6;
+
+        names, target_angles, times = self.jointTrajectoryGoalMsgToAL(goal)
+        old_stiff = self.motionProxy.getStiffnesses(names)
+        #angles = copy.deepcopy(target_angles) # make a copy
+        n = len(target_angles)
+        print "initial angles: \n", names
+        print target_angles
+        #print "goal tolerance"
+        #print goal.goal_tolerance
+        pos_tolerance = [a.position for a in goal.goal_tolerance]
+
+        class Pair:
+            def __init__(self, a, b):
+                self.reading = a
+                self.command = b
+
+        final_command = JointState()
+        final_reading = JointState()
+        final_reading.name = copy.deepcopy(names)
+        final_command.name = copy.deepcopy(names)
+        final_reading.position = []
+        final_command.position = []
+        finals = dict()
+        for name in names:
+            finals[ name ] = Pair(0.0, 0.0)
+
+        error = False
+        preempt = False
+        self.motionProxy.setSmartStiffnessEnabled(False)
+        for jn, ta, tol in zip(names, target_angles, pos_tolerance):
+            if self.refineJointTargetServer.is_preempt_requested() or rospy.is_shutdown():
+                preempt = True
+                break
+            new_target = ta[0]
+            #TODO: Reenable
+            # self.motionProxy.stiffnessInterpolation( jn, 1.0, dur)
+            lim = self.motionProxy.getLimits(jn)[0]
+            ok, target = self.setAngles(jn, new_target, tol, dur, increment, lim, max_dur)
+            finals[jn].command = target
+            #finals[jn].reading = target
+            #final_command.name.append( jn )
+            #final_command.position.append( target )
+            #final_reading.name.append( jn )
+            #final_reading.position.append( target ) # will be overwritten later
+            if not ok:
+                error = True
+                break
+
+
+        cur_angles = self.motionProxy.getAngles(names, True)
+        diff = [target_angles[i][0] - cur_angles[i] for i in range(n)]
+        check = [abs(a) < t for a,t in zip(diff, pos_tolerance) ]
+        # print "reached: ", names
+        # print cur_angles
+        # print "diff is: "
+        # print diff
+        # print "success?"
+        # print check
+        if not error and not preempt:
+            for i in range(n):
+                if self.refineJointTargetServer.is_preempt_requested() or rospy.is_shutdown():
+                    preempt = True
+                    rospy.loginfo("Preempt requested")
+                    break
+                if not check[i]:
+                    print "Trying to fix %s once more"%(names[i])
+                    lim = self.motionProxy.getLimits(names[i])[0]
+                    ok, target = self.setAngles(names[i], target_angles[i][0], pos_tolerance[i], 2*dur, increment/2.0, lim, max_dur)
+                    finals[ names[i] ].command = target
+                    #idx = final_command.name.index(n)
+                    #final_command.position[idx] = target
+                    if not ok:
+                        error = True
+                        break
+
+        if error:
+            rospy.logerr('Error occured')
+
+        #restore previous stiffness
+        self.motionProxy.stiffnessInterpolation( names, old_stiff, [[dur]]*n)
+
+        cur_angles = self.motionProxy.getAngles(names, True)
+        diff = [target_angles[i][0] - cur_angles[i] for i in range(n)]
+        check = [abs(a) < t for a,t in zip(diff, pos_tolerance) ]
+        print "reached: ", names
+        print cur_angles
+        print "diff is: "
+        print diff
+        print "success?"
+        print check
+        for (name, c) in zip(names, cur_angles):
+            finals[name].reading = c
+
+        #for n, c in zip(names, cur_angles):
+        #    idx = final_reading.name.index(n)
+        #    final_reading.position[idx]=c
+
+        #for jn, val in zip(final_reading.name, final_reading.position):
+        #    print "final reading ", jn, val
+        for (key, val) in finals.iteritems():
+            print key, ":", val.command, ",", val.reading
+            res.final_command.name.append(key)
+            res.final_command.position.append(val.command)
+            res.final_reading.name.append(key)
+            res.final_reading.position.append(val.reading)
+
+        res.error_code = FollowJointTrajectoryResult.GOAL_TOLERANCE_VIOLATED
+        if all(check):
+            print 'succ'
+            res.error_code = FollowJointTrajectoryResult.SUCCESSFUL
+            self.refineJointTargetServer.set_succeeded(res)
+            rospy.loginfo("refineJointTargetServer action done")
+        elif error:
+            print 'error'
+            self.refineJointTargetServer.set_preempted(res)
+        elif preempt:
+            print 'preempt'
+            self.refineJointTargetServer.set_preempted(res)
+            rospy.logdebug("refineJointTargetServer preempted")
+        else: # neither success nor error nor preempt-->violation of tolerance
+            print 'nothing'
+            rospy.loginfo("refineJointTargetServer action done")
+
+
     def executeFollowJointTrajectoryAction(self, goal):
         rospy.loginfo("FollowJointTrajectory action executing");
 
@@ -161,6 +379,9 @@ class NaoController(NaoNode):
 
         rospy.loginfo("Received trajectory for joints: %s times: %s", str(names), str(times))
         rospy.loginfo("Trajectory angles: %s", str(angles))
+        #rospy.loginfo("goal_tolerance: ", str([jt for jt in goal.goal_tolerance]))
+        print "goal_tolerance"
+        print goal.goal_tolerance
 
         task_id = None
         running = True
@@ -195,6 +416,11 @@ class NaoController(NaoNode):
 #             self.followJointTrajectoryServer.set_aborted(followJointTrajectoryResult)
 #             rospy.logerr("FollowJointTrajectory action error in result: sizes mismatch")
 
+        cur_angles = self.motionProxy.getAngles(names, True)
+        diff = [angles[i][-1] - cur_angles[i] for i in range(len(angles))]
+        #check = [ fabs(diff[i] -
+        print "reached: ", cur_angles
+        # TODO: call refine if tolerance is violated (BUG: tolerance not specified by MoveIt!)
         if running and preempt:
             self.followJointTrajectoryServer.set_preempted(followJointTrajectoryResult)
             rospy.logdebug("FollowJointTrajectory preempted")
