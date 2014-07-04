@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
     tf
     sensor_msgs
     geometry_msgs
+    trajectory_msgs 
     nao_msgs
     dynamic_reconfigure)
 

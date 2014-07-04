@@ -8,7 +8,8 @@ set( MESSAGE_DEPENDENCIES
     geometry_msgs
     sensor_msgs
     nav_msgs
-    trajectory_msgs)
+    trajectory_msgs
+    control_msgs)
 
 #Declare build dependencies
 find_package(catkin REQUIRED 
@@ -47,6 +48,7 @@ add_action_files(DIRECTORY action
     FollowPath.action
     JointAnglesWithSpeed.action
     JointTrajectory.action
+	ReachJointValuesPrecise.action
     RunBehavior.action 
     SetSpeechVocabulary.action
     SpeechWithFeedback.action
